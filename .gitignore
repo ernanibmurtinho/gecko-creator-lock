@@ -1,0 +1,28 @@
+# External Claude skill submodules
+.claude/skills/ext/
+CLAUDE.local.md
+node_modules
+
+# Local scratch / instruction artifacts (not shipped)
+tmp/
+
+# Secrets and env
+.env
+.env.*
+!.env.example
+
+# Rust / Anchor
+target/
+.anchor/
+
+# Next.js / frontend
+.next/
+dist/
+app/.next/
+
+# Logs
+*.log
+
+# claude
+.claude/
+
