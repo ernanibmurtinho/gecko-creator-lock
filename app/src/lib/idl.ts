@@ -7,7 +7,7 @@ export const IDL = {
   instructions: [
     {
       name: "initialize_and_deposit",
-      discriminator: [207, 252, 149, 104, 12, 147, 170, 30],
+      discriminator: [18, 152, 143, 221, 235, 239, 245, 30],
       accounts: [
         { name: "maker", writable: true, signer: true },
         { name: "taker" },
@@ -47,7 +47,7 @@ export const IDL = {
     },
     {
       name: "release",
-      discriminator: [209, 117, 118, 81, 206, 4, 10, 116],
+      discriminator: [253, 249, 15, 206, 28, 127, 193, 241],
       accounts: [
         { name: "taker", writable: true, signer: true },
         { name: "maker", writable: true },
@@ -83,7 +83,7 @@ export const IDL = {
     },
     {
       name: "cancel_and_refund",
-      discriminator: [85, 63, 7, 200, 113, 8, 53, 189],
+      discriminator: [86, 34, 75, 82, 239, 186, 2, 228],
       accounts: [
         { name: "maker", writable: true, signer: true },
         {
@@ -120,7 +120,7 @@ export const IDL = {
   accounts: [
     {
       name: "EscrowState",
-      discriminator: [143, 247, 93, 202, 119, 199, 123, 70],
+      discriminator: [19, 90, 148, 111, 55, 130, 229, 108],
     },
   ],
   types: [
