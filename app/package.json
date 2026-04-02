@@ -24,6 +24,9 @@
   "overrides": {
     "fastestsmallesttextencoderdecoder": "^1.0.22"
   },
+  "resolutions": {
+    "fastestsmallesttextencoderdecoder": "^1.0.22"
+  },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
