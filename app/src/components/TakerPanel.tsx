@@ -9,10 +9,8 @@ import {
   VersionedTransaction,
 } from "@solana/web3.js";
 import { Program, AnchorProvider, BN } from "@coral-xyz/anchor";
-import {
-  TOKEN_PROGRAM_ID,
-  getAssociatedTokenAddressSync,
-} from "@solana/spl-token";
+import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { RefreshCw, CheckCircle } from "lucide-react";
 import { IDL, PROGRAM_ID } from "@/lib/idl";
 
 interface EscrowState {
@@ -22,6 +20,22 @@ interface EscrowState {
   tokenMint: string;
   amount: string;
   status: "active" | "resolved" | "canceled";
+  daysLeft: number;
+}
+
+function getDeadlineBar(daysLeft: number, status: EscrowState["status"]) {
+  if (status === "resolved") {
+    return { pct: 100, colorClass: "deadline-bar-green", label: "Completed", urgent: false };
+  }
+  if (status === "canceled") {
+    return { pct: 0, colorClass: "deadline-bar-red", label: "Canceled", urgent: false };
+  }
+  const total = 14;
+  const pct = Math.min(100, Math.max(0, Math.round(((total - daysLeft) / total) * 100)));
+  const urgent = daysLeft <= 1;
+  const colorClass = urgent ? "deadline-bar-red" : daysLeft <= 3 ? "deadline-bar-red" : "deadline-bar-cyan";
+  const label = urgent ? `${daysLeft}h left` : `${daysLeft} days left`;
+  return { pct, colorClass, label, urgent };
 }
 
 export function TakerPanel({ refreshTrigger }: { refreshTrigger: number }) {
@@ -41,24 +55,18 @@ export function TakerPanel({ refreshTrigger }: { refreshTrigger: number }) {
     if (!publicKey || !w.signTransaction || !w.signAllTransactions) return null;
     const anchorWallet = {
       publicKey,
-      signTransaction: <T extends Transaction | VersionedTransaction>(
-        tx: T,
-      ) => {
+      signTransaction: <T extends Transaction | VersionedTransaction>(tx: T) => {
         const cur = walletRef.current;
         if (!cur.signTransaction) throw new Error("Wallet not ready");
         return cur.signTransaction(tx);
       },
-      signAllTransactions: <T extends Transaction | VersionedTransaction>(
-        txs: T[],
-      ) => {
+      signAllTransactions: <T extends Transaction | VersionedTransaction>(txs: T[]) => {
         const cur = walletRef.current;
         if (!cur.signAllTransactions) throw new Error("Wallet not ready");
         return cur.signAllTransactions(txs);
       },
     };
-    const provider = new AnchorProvider(connection, anchorWallet, {
-      commitment: "confirmed",
-    });
+    const provider = new AnchorProvider(connection, anchorWallet, { commitment: "confirmed" });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return new Program(IDL as any, provider);
   }, [connection, publicKey]);
@@ -70,24 +78,24 @@ export function TakerPanel({ refreshTrigger }: { refreshTrigger: number }) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const accounts = await (program.account as any).escrowState.all();
       const relevant = accounts
-        .filter(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (a: any) =>
-            a.account.maker.toBase58() === publicKey.toBase58() ||
-            a.account.taker.toBase58() === publicKey.toBase58(),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .filter((a: any) =>
+          a.account.maker.toBase58() === publicKey.toBase58() ||
+          a.account.taker.toBase58() === publicKey.toBase58(),
         )
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .map((a: any) => ({
+        .map((a: any, i: number) => ({
           pda: a.publicKey.toBase58(),
           maker: a.account.maker.toBase58(),
           taker: a.account.taker.toBase58(),
           tokenMint: a.account.tokenMint.toBase58(),
           amount: (a.account.amount as BN).toString(),
           status: "active" as const,
+          daysLeft: [4, 14, 0, 14, 14][i % 5], // mock deadline variation
         }));
       setEscrows(relevant);
     } catch {
-      // Silently handle — program might not be deployed on devnet yet
+      // Silently handle — program might not be deployed yet
     } finally {
       setLoading(false);
     }
@@ -110,7 +118,6 @@ export function TakerPanel({ refreshTrigger }: { refreshTrigger: number }) {
         new PublicKey(PROGRAM_ID),
       );
       const takerAta = getAssociatedTokenAddressSync(mint, publicKey);
-
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const tx = await (program.methods as any)
         .release()
@@ -125,16 +132,12 @@ export function TakerPanel({ refreshTrigger }: { refreshTrigger: number }) {
           systemProgram: SystemProgram.programId,
         })
         .rpc();
-
-      setTxStatus((s) => ({
-        ...s,
-        [key]: `Liberado! ${tx.slice(0, 12)}...`,
-      }));
+      setTxStatus((s) => ({ ...s, [key]: `ok:${tx.slice(0, 12)}` }));
       fetchEscrows();
     } catch (e: unknown) {
       setTxStatus((s) => ({
         ...s,
-        [key]: `Erro: ${e instanceof Error ? e.message.slice(0, 60) : String(e)}`,
+        [key]: `err:${e instanceof Error ? e.message.slice(0, 50) : String(e)}`,
       }));
     }
   };
@@ -142,7 +145,7 @@ export function TakerPanel({ refreshTrigger }: { refreshTrigger: number }) {
   const handleCancel = async (escrow: EscrowState) => {
     if (!program || !publicKey) return;
     const key = escrow.pda;
-    setTxStatus((s) => ({ ...s, [key]: "cancelando..." }));
+    setTxStatus((s) => ({ ...s, [key]: "canceling..." }));
     try {
       const mint = new PublicKey(escrow.tokenMint);
       const escrowStatePda = new PublicKey(escrow.pda);
@@ -151,7 +154,6 @@ export function TakerPanel({ refreshTrigger }: { refreshTrigger: number }) {
         new PublicKey(PROGRAM_ID),
       );
       const makerAta = getAssociatedTokenAddressSync(mint, publicKey);
-
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const tx = await (program.methods as any)
         .cancelAndRefund()
@@ -165,40 +167,47 @@ export function TakerPanel({ refreshTrigger }: { refreshTrigger: number }) {
           systemProgram: SystemProgram.programId,
         })
         .rpc();
-
-      setTxStatus((s) => ({
-        ...s,
-        [key]: `Cancelado! ${tx.slice(0, 12)}...`,
-      }));
+      setTxStatus((s) => ({ ...s, [key]: `ok:${tx.slice(0, 12)}` }));
       fetchEscrows();
     } catch (e: unknown) {
       setTxStatus((s) => ({
         ...s,
-        [key]: `Erro: ${e instanceof Error ? e.message.slice(0, 60) : String(e)}`,
+        [key]: `err:${e instanceof Error ? e.message.slice(0, 50) : String(e)}`,
       }));
     }
   };
 
-  const statusColor: Record<EscrowState["status"], string> = {
-    active: "chip-active",
-    resolved: "chip-resolved",
-    canceled: "chip-canceled",
-  };
+  const activeCount = escrows.filter((e) => e.status === "active").length;
+  const resolvedCount = escrows.filter((e) => e.status === "resolved").length;
 
   return (
     <div className="panel">
+      {/* Panel header row */}
       <div className="panel-header-row">
         <div>
-          <h2 className="panel-title">
-            <span className="icon">📋</span> Atividade do Contrato
-          </h2>
-          <p className="panel-subtitle">Status & Resolução</p>
+          <h2 className="panel-title">Atividade do Contrato</h2>
+          <p className="panel-subtitle">Status e Resolução</p>
         </div>
-        <button className="btn-ghost" onClick={fetchEscrows} disabled={loading}>
-          {loading ? "..." : "↻"}
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
+          {escrows.length > 0 && (
+            <div className="activity-chips">
+              <span className="activity-chip activity-chip-active">
+                <span className="activity-chip-dot activity-chip-dot-active" />
+                {activeCount} ACTIVE
+              </span>
+              <span className="activity-chip activity-chip-resolved">
+                <span className="activity-chip-dot activity-chip-dot-resolved" />
+                {resolvedCount} RESOLVED
+              </span>
+            </div>
+          )}
+          <button className="btn-ghost" onClick={fetchEscrows} disabled={loading} aria-label="Atualizar">
+            <RefreshCw size={13} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
+          </button>
+        </div>
       </div>
 
+      {/* Empty state */}
       {escrows.length === 0 && !loading && (
         <p className="empty-state">
           {publicKey
@@ -207,77 +216,100 @@ export function TakerPanel({ refreshTrigger }: { refreshTrigger: number }) {
         </p>
       )}
 
-      <div className="escrow-list">
-        {escrows.map((escrow) => {
-          const isMaker = publicKey?.toBase58() === escrow.maker;
-          const isTaker = publicKey?.toBase58() === escrow.taker;
+      {/* Table */}
+      {escrows.length > 0 && (
+        <div>
+          <div className="escrow-table-header">
+            <span className="escrow-table-col-label">Criador</span>
+            <span className="escrow-table-col-label">Valor</span>
+            <span className="escrow-table-col-label">Estado</span>
+            <span className="escrow-table-col-label">Deadline</span>
+            <span className="escrow-table-col-label" style={{ textAlign: "right" }}>Ação</span>
+          </div>
 
-          return (
-            <div key={escrow.pda} className="escrow-card">
-              <div className="escrow-card-header">
-                <span className={`chip ${statusColor[escrow.status]}`}>
-                  {escrow.status.toUpperCase()}
+          {escrows.map((escrow) => {
+            const isMaker = publicKey?.toBase58() === escrow.maker;
+            const isTaker = publicKey?.toBase58() === escrow.taker;
+            const { pct, colorClass, label, urgent } = getDeadlineBar(escrow.daysLeft, escrow.status);
+            const rowTxStatus = txStatus[escrow.pda];
+
+            return (
+              <div key={escrow.pda} className="escrow-table-row">
+                {/* Creator */}
+                <span className="escrow-creator">
+                  {escrow.taker.slice(0, 6)}...{escrow.taker.slice(-3)}
                 </span>
-                <span className="font-mono text-xs text-slate-400">
-                  {escrow.pda.slice(0, 8)}...
+
+                {/* Amount */}
+                <span>
+                  <span className="escrow-amount-val">
+                    {(parseInt(escrow.amount) / 1_000_000).toLocaleString(undefined, {
+                      minimumFractionDigits: 0,
+                    })}
+                  </span>
+                  <span className="escrow-amount-unit">USDC</span>
                 </span>
-              </div>
 
-              <div className="escrow-detail-grid">
-                <div>
-                  <span className="detail-label">Maker</span>
-                  <span className="font-mono detail-value">
-                    {escrow.maker.slice(0, 8)}...
+                {/* State chip */}
+                <span>
+                  <span className={`chip chip-${escrow.status}`}>
+                    {escrow.status === "active" ? "ACTIVE" : escrow.status === "resolved" ? "RESOLVED" : "CANCELED"}
+                  </span>
+                </span>
+
+                {/* Deadline progress */}
+                <div className="deadline-cell">
+                  <div className="deadline-bar-track">
+                    <div
+                      className={`deadline-bar-fill ${colorClass}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <span className={`deadline-label ${urgent ? "deadline-label-urgent" : ""}`}>
+                    {label}
                   </span>
                 </div>
-                <div>
-                  <span className="detail-label">Taker</span>
-                  <span className="font-mono detail-value">
-                    {escrow.taker.slice(0, 8)}...
-                  </span>
-                </div>
-                <div>
-                  <span className="detail-label">Valor</span>
-                  <span className="detail-value accent">
-                    {(parseInt(escrow.amount) / 1_000_000).toFixed(2)}
-                  </span>
-                </div>
-                <div>
-                  <span className="detail-label">Mint</span>
-                  <span className="font-mono detail-value">
-                    {escrow.tokenMint.slice(0, 8)}...
-                  </span>
+
+                {/* Actions */}
+                <div className="escrow-action-cell">
+                  {escrow.status === "resolved" ? (
+                    <CheckCircle size={16} color="var(--accent-green)" />
+                  ) : rowTxStatus ? (
+                    <span
+                      style={{
+                        fontSize: "0.62rem",
+                        fontFamily: "var(--font-mono)",
+                        color: rowTxStatus.startsWith("err:")
+                          ? "var(--accent-red)"
+                          : "var(--accent-green)",
+                      }}
+                    >
+                      {rowTxStatus.startsWith("err:")
+                        ? "error"
+                        : rowTxStatus.startsWith("ok:")
+                          ? "sent"
+                          : rowTxStatus}
+                    </span>
+                  ) : (
+                    <>
+                      {isTaker && (
+                        <button className="btn-release" onClick={() => handleRelease(escrow)}>
+                          Release
+                        </button>
+                      )}
+                      {isMaker && (
+                        <button className="btn-cancel" onClick={() => handleCancel(escrow)}>
+                          Refund
+                        </button>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
-
-              <div className="escrow-actions">
-                {isTaker && (
-                  <button
-                    className="btn-release"
-                    onClick={() => handleRelease(escrow)}
-                  >
-                    Liberar Fundos
-                  </button>
-                )}
-                {isMaker && (
-                  <button
-                    className="btn-cancel"
-                    onClick={() => handleCancel(escrow)}
-                  >
-                    Solicitar Reembolso
-                  </button>
-                )}
-              </div>
-
-              {txStatus[escrow.pda] && (
-                <div className="status-toast status-info">
-                  {txStatus[escrow.pda]}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
