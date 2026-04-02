@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "CreatorLock — conditional payment escrow for the creator economy on Solana",
   "scripts": {
+    "dev": "cd app && next dev",
+    "build": "cd app && next build",
+    "start": "cd app && next start",
     "demo": "ts-node -P tsconfig.json scripts/devnet-demo.ts",
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
