@@ -1,11 +1,85 @@
 # 🦎 CreatorLock — SPL escrow for creators
 
 [![Anchor](https://img.shields.io/badge/Anchor-0.32.1-9945ff)](https://www.anchor-lang.com/)
-[![Solana](https://img.shields.io/badge/Solana-Program-14F195?logo=solana)](https://solana.com/)
+[![Solana](https://img.shields.io/badge/Solana-Devnet-14F195?logo=solana)](https://explorer.solana.com/address/3XBXCwwN5CMGhjnV1CD94exPqPY4mL2LPifdzaowGmhw?cluster=devnet)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **CreatorLock** is a minimal, trustless escrow on Solana for creator–sponsor deals: the **maker** (sponsor) locks SPL tokens in a PDA-backed vault; the **taker** (creator) **releases** them after delivery, or the maker **cancels** and gets a full refund. Built with **Anchor 0.32.1** following the **solana-vault-standard** pattern, with an **Adversarial Battle Test Suite** that proves security under attack. Includes a **Next.js 16** + **Tailwind CSS 4** app with a dark IDE-style UI.
+
+---
+
+## 🇧🇷 Português — Superteam Brasil x NearX · Desafio 1
+
+> Submissão para o **Desafio 1 — Escrow com Anchor** do Bootcamp Hackathon Global 2026.
+
+### O que o programa faz
+
+**CreatorLock** é um escrow condicional de tokens SPL na Solana. O **maker** (patrocinador) deposita tokens num vault controlado por uma PDA. O **taker** (criador) libera os fundos após entregar o trabalho — ou o maker cancela e recupera tudo. Nenhum intermediário, nenhuma taxa além do rent da Solana.
+
+### Instruções disponíveis
+
+| Instrução | Quem assina | O que faz |
+| --------- | ----------- | --------- |
+| `initialize_and_deposit(amount)` | Maker | Cria `EscrowState` + vault token account (PDA); transfere `amount` do ATA do maker → vault |
+| `release()` | Taker | Transfere vault → ATA do taker; fecha vault e escrow; devolve rent ao maker |
+| `cancel_and_refund()` | Maker | Transfere vault → ATA do maker; fecha vault e escrow; devolve rent ao maker |
+
+**PDAs utilizadas:**
+- `EscrowState` → seeds: `["escrow", maker]`
+- `vault` → seeds: `["vault", escrow_state]`
+- Bumps canônicos armazenados on-chain (`bump`, `vault_bump`) — sem recalcular a cada chamada
+
+### Como rodar os testes
+
+```bash
+# 1. Instalar dependências
+yarn install
+
+# 2. Build do programa
+anchor build
+
+# 3. Rodar a suite de testes (sobe validador local automaticamente)
+anchor test
+```
+
+Resultado esperado: **11 testes passando** — happy path, cancel path, controle de acesso e 4 testes adversariais (Battle Suite).
+
+### Program ID (Devnet)
+
+```
+3XBXCwwN5CMGhjnV1CD94exPqPY4mL2LPifdzaowGmhw
+```
+
+[Ver no Solana Explorer →](https://explorer.solana.com/address/3XBXCwwN5CMGhjnV1CD94exPqPY4mL2LPifdzaowGmhw?cluster=devnet)
+
+---
+
+## 💡 The Problem
+
+The creator economy runs on trust — and trust breaks. Sponsors pay upfront and creators disappear. Creators deliver and sponsors ghost. There is no neutral party on the internet that both sides can trust without a cut.
+
+**CreatorLock** puts the escrow on-chain. No intermediary. No fees beyond Solana rent. The rules are the program — and the program is open source.
+
+| Role | What they do |
+| ---- | ------------ |
+| **Maker** (sponsor) | Locks SPL tokens in a PDA vault. Funds are provably inaccessible until resolution. |
+| **Taker** (creator) | Delivers the work, then calls `release()` to collect. |
+| **Either** | If the deal falls through, the maker calls `cancel_and_refund()` and gets everything back. |
+
+---
+
+## 🖥️ Live Demo
+
+**Program deployed on Devnet:**
+[`3XBXCwwN5CMGhjnV1CD94exPqPY4mL2LPifdzaowGmhw`](https://explorer.solana.com/address/3XBXCwwN5CMGhjnV1CD94exPqPY4mL2LPifdzaowGmhw?cluster=devnet)
+
+![CreatorLock UI — deposit confirmed on devnet](docs/screenshot.png)
+
+The screenshot above shows a live devnet transaction: maker deposited 1.5 tokens into escrow, the on-chain `EscrowState` appeared in the Activity panel with status **ACTIVE**, and the "Solicitar Reembolso" action became available immediately.
+
+**Deposit transaction (devnet):**
+[`2i3cXkCqy4UjZjmAVgVx2N4ShqEmQyCBR1b8cn4C8K1Ez641abo9UtwZiYtwuszXZYi4eZken9e4XrridG9QFRKn`](https://explorer.solana.com/tx/2i3cXkCqy4UjZjmAVgVx2N4ShqEmQyCBR1b8cn4C8K1Ez641abo9UtwZiYtwuszXZYi4eZken9e4XrridG9QFRKn?cluster=devnet)
 
 ---
 
@@ -140,9 +214,12 @@ Use a dedicated funded key in `~/.config/solana/id.json` (or `ANCHOR_WALLET`). *
 From the repo root:
 
 ```bash
+# Install all dependencies (root + app share the same yarn.lock)
+yarn install
+
+# Start the dev server
 cd app
-npm install    # or: yarn / pnpm — project ships npm lock conventions in app/
-npm run dev
+yarn dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000). Use a wallet on the **same cluster** as your RPC (e.g. Devnet).
